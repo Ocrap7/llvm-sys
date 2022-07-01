@@ -496,3 +496,32 @@ std::compile_error!(concat!(
        llvm-sys: https://crates.io/crates/llvm-sys
        llvmenv: https://crates.io/crates/llvmenv"
 ));
+
+extern "C" {
+    pub fn LLVMGetInsertPoint(block: LLVMBasicBlockRef) -> LLVMValueRef;
+    pub fn LLVMSetInsertPoint(block: LLVMBasicBlockRef, ip: LLVMValueRef);
+    pub fn LLVMGetTypeSize(M: LLVMModuleRef, ty: LLVMTypeRef) -> u64;
+
+    pub fn LLVMSetAllocatedType(Alloca: LLVMValueRef, M: LLVMModuleRef, ty: LLVMTypeRef);
+    pub fn LLVMGetValueAt(val: LLVMValueRef, index: u32) -> LLVMValueRef;
+    pub fn LLVMCreateStringLiteral(
+        B: LLVMBuilderRef,
+        Str: *const i8,
+        Length: u32,
+        Name: *const i8,
+    ) -> LLVMValueRef;
+
+    pub fn LLVMCreateGlobalValue(
+        M: LLVMModuleRef,
+        ty: LLVMTypeRef,
+        val: LLVMValueRef,
+    ) -> LLVMValueRef;
+    pub fn LLVMNumberOfChildrenInBlock(B: LLVMBasicBlockRef) -> usize;
+    pub fn LLVMBuildAlignedLoad(
+        arg1: LLVMBuilderRef,
+        Ty: LLVMTypeRef,
+        PointerVal: LLVMValueRef,
+        align: u32,
+        Name: *const ::libc::c_char,
+    ) -> LLVMValueRef;
+}

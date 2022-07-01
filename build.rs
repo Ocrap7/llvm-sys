@@ -212,6 +212,31 @@ fn llvm_config_ex<S: AsRef<OsStr>>(binary: S, arg: &str) -> io::Result<String> {
         .arg("--link-static") // Don't use dylib for >= 3.9
         .output()
         .map(|output| {
+            println!("Out  {:?}", output);
+            String::from_utf8(output.stdout).expect("Output from llvm-config was not valid UTF-8")
+        })
+}
+
+/// Get the output from running `llvm-config` with the given argument.
+///
+/// Lazily searches for or compiles LLVM as configured by the environment
+/// variables.
+fn llvm_config_args(arg: Vec<&str>) -> String {
+    llvm_config_ex_args(&*LLVM_CONFIG_PATH.clone().unwrap(), arg)
+        .expect("Surprising failure from llvm-config")
+}
+
+/// Invoke the specified binary as llvm-config.
+///
+/// Explicit version of the `llvm_config` function that bubbles errors
+/// up.
+fn llvm_config_ex_args<S: AsRef<OsStr>>(binary: S, arg: Vec<&str>) -> io::Result<String> {
+    Command::new(binary)
+        .args(arg)
+        .arg("--link-static") // Don't use dylib for >= 3.9
+        .output()
+        .map(|output| {
+            println!("Out  {:?}", output);
             String::from_utf8(output.stdout).expect("Output from llvm-config was not valid UTF-8")
         })
 }
@@ -344,10 +369,26 @@ fn get_link_libraries() -> Vec<String> {
         })
         .map(str::to_owned)
         .collect::<Vec<String>>()
+
+    // let components = ["--libs", "core", "X86"];
+    // llvm_config_args(components.to_vec())
+    //     .split(&[' ', '\n'] as &[char])
+    //     .filter(|s| !s.is_empty())
+    //     .map(|name| {
+    //         if Path::new(name).exists() {
+    //             // On MSVC llvm-config will print the full name to libraries, but
+    //             // we're only interested in the name part
+    //             let name = Path::new(name).file_name().unwrap().to_str().unwrap();
+    //             String::from(name.trim_end_matches(".lib"))
+    //         } else {
+    //             String::from(name)
+    //         }
+    //     })
+    //     .collect()
 }
 
 fn get_llvm_cflags() -> String {
-    let output = llvm_config("--cflags");
+    let output = llvm_config("--cxxflags");
 
     // llvm-config includes cflags from its own compilation with --cflags that
     // may not be relevant to us. In particularly annoying cases, these might
@@ -362,7 +403,7 @@ fn get_llvm_cflags() -> String {
         return output;
     }
 
-    llvm_config("--cflags")
+    llvm_config("--cxxflags")
         .split(&[' ', '\n'][..])
         .filter(|word| !word.starts_with("-W"))
         .collect::<Vec<_>>()
@@ -375,6 +416,10 @@ fn is_llvm_debug() -> bool {
 }
 
 fn main() {
+    std::env::set_var(
+        "LLVM_SYS_130_PREFIX",
+        "D:\\Developement\\Libraries\\llvm-project\\release_build\\RelWithDebInfo",
+    );
     // Behavior can be significantly affected by these vars.
     println!("cargo:rerun-if-env-changed={}", &*ENV_LLVM_PREFIX);
     println!("cargo:rerun-if-env-changed={}", &*ENV_IGNORE_BLOCKLIST);
@@ -382,6 +427,9 @@ fn main() {
     println!("cargo:rerun-if-env-changed={}", &*ENV_NO_CLEAN_CFLAGS);
     println!("cargo:rerun-if-env-changed={}", &*ENV_USE_DEBUG_MSVCRT);
     println!("cargo:rerun-if-env-changed={}", &*ENV_FORCE_FFI);
+
+    println!("cargo:rerun-if-changed=wrappers/target.cpp");
+    println!("cargo:rerun-if-changed=build.rs");
 
     if cfg!(feature = "no-llvm-linking") && cfg!(feature = "disable-alltargets-init") {
         // exit early as we don't need to do anything and llvm-config isn't needed at all
@@ -397,7 +445,12 @@ fn main() {
     if !cfg!(feature = "disable-alltargets-init") {
         std::env::set_var("CFLAGS", get_llvm_cflags());
         cc::Build::new()
-            .file("wrappers/target.c")
+            .file("wrappers/target.cpp")
+            .include("D:\\Developement\\Libraries\\llvm-project\\llvm\\include")
+            // .define("_ITERATOR_DEBUG_LEVEL", "2")
+            // .flag("/MDd")
+            .debug(true)
+            .cpp(true)
             .compile("targetwrappers");
     }
 
@@ -436,4 +489,5 @@ fn main() {
     if force_ffi {
         println!("cargo:rustc-link-lib=dylib={}", "ffi");
     }
+    // println!("cargo:rustc-link-lib=dylib=LLVM-C");
 }
